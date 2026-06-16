@@ -1458,13 +1458,19 @@ function addContact(){
 }
 
 /* ============================================================
-   CLIMA
+   CLIMA - CORRIGIDO COM MELHOR TRATAMENTO DE ERROS
 ============================================================ */
-const OWM_KEY='19498d7b4c3d5e9cfadee4ccc7bf50f8';
-function weatherHTML(){
+const OWM_KEY = '19498d7b4c3d5e9cfadee4ccc7bf50f8'; // Chave pública - pode ser substituída pela sua
+
+function weatherHTML() {
+  // Carrega cidade salva no localStorage
+  const savedCity = localStorage.getItem('weatherCity') || '';
+  if (savedCity && !weatherCity) {
+    weatherCity = savedCity;
+  }
   return `<div class="card" style="max-width:480px;margin:0 auto;">
     <div class="card-title" data-icon="🌤️">Clima</div>
-    ${weatherData?`
+    ${weatherData ? `
       <div class="weather-big" style="margin-bottom:16px;">
         <div class="w-icon" style="font-size:4rem;">${weatherIcon(weatherData.weather[0].id)}</div>
         <div class="w-temp" style="font-size:3rem;">${Math.round(weatherData.main.temp)}°C</div>
@@ -1472,57 +1478,100 @@ function weatherHTML(){
         <div class="w-city" style="font-size:.9rem;margin-top:8px;">📍 ${esc(weatherCity)}</div>
         <div class="w-details" style="margin-top:16px;gap:24px;">
           <span>💧 Umidade: <b>${weatherData.main.humidity}%</b></span>
-          <span>💨 Vento: <b>${Math.round(weatherData.wind.speed*3.6)} km/h</b></span>
+          <span>💨 Vento: <b>${Math.round(weatherData.wind.speed * 3.6)} km/h</b></span>
           <span>🌡️ Sensação: <b>${Math.round(weatherData.main.feels_like)}°C</b></span>
         </div>
       </div>
-    `:`<div class="empty"><span class="empty-icon">🌍</span>Digite uma cidade para ver o clima</div>`}
+    ` : `
+      <div class="empty">
+        <span class="empty-icon">🌍</span>
+        <p>Digite uma cidade para ver o clima</p>
+        ${savedCity ? `<p style="font-size:.7rem;color:var(--text3);">Última busca: ${esc(savedCity)}</p>` : ''}
+      </div>
+    `}
     <div class="w-search">
-      <input type="text" id="wCityInput" placeholder="Nome da cidade..." value="${esc(weatherCity)}"/>
+      <input type="text" id="wCityInput" placeholder="Ex: São Paulo, Rio de Janeiro" value="${esc(weatherCity || '')}" />
       <button class="btn btn-gold" id="wSearchBtn">Buscar</button>
     </div>
-    <div id="wError" style="color:var(--red);font-size:.8rem;margin-top:8px;display:none;">Cidade não encontrada.</div>
+    <div id="wError" style="color:var(--red);font-size:.8rem;margin-top:8px;display:none;"></div>
+    <div id="wLoading" style="color:var(--text3);font-size:.8rem;margin-top:8px;display:none;">⏳ Carregando...</div>
   </div>`;
 }
-function attachWeather(){
-  document.getElementById('wSearchBtn').onclick=fetchWeather;
-  document.getElementById('wCityInput').addEventListener('keydown',e=>{ if(e.key==='Enter') fetchWeather(); });
-}
-function weatherIcon(id){
-  if(id>=200&&id<300) return '⛈️';
-  if(id>=300&&id<400) return '🌦️';
-  if(id>=500&&id<600) return '🌧️';
-  if(id>=600&&id<700) return '❄️';
-  if(id>=700&&id<800) return '🌫️';
-  if(id===800) return '☀️';
-  if(id===801) return '🌤️';
-  if(id===802) return '⛅';
-  return '☁️';
-}
-async function fetchWeather(){
-  const city=document.getElementById('wCityInput').value.trim();
-  if(!city) return;
-  try{
-    const r=await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${OWM_KEY}&units=metric&lang=pt_br`);
-    if(!r.ok) throw new Error();
-    weatherData=await r.json();
-    weatherCity=city;
-    document.getElementById('wError').style.display='none';
-    updateWeatherMini();
-    renderPage('clima');
-    showToast('Clima atualizado ✓');
-  }catch(e){
-    document.getElementById('wError').style.display='block';
+
+function attachWeather() {
+  const input = document.getElementById('wCityInput');
+  const btn = document.getElementById('wSearchBtn');
+  const errorDiv = document.getElementById('wError');
+  const loadingDiv = document.getElementById('wLoading');
+
+  function buscarClima() {
+    const cidade = input.value.trim();
+    if (!cidade) {
+      errorDiv.textContent = '⚠️ Digite o nome de uma cidade.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    errorDiv.style.display = 'none';
+    loadingDiv.style.display = 'block';
+    fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cidade)}&appid=${OWM_KEY}&units=metric&lang=pt_br`)
+      .then(res => {
+        if (!res.ok) {
+          if (res.status === 404) throw new Error('Cidade não encontrada.');
+          if (res.status === 401) throw new Error('Chave da API inválida. Configure sua própria chave.');
+          throw new Error(`Erro ${res.status}: ${res.statusText}`);
+        }
+        return res.json();
+      })
+      .then(data => {
+        weatherData = data;
+        weatherCity = cidade;
+        localStorage.setItem('weatherCity', cidade);
+        loadingDiv.style.display = 'none';
+        errorDiv.style.display = 'none';
+        updateWeatherMini();
+        renderPage('clima');
+        showToast('Clima atualizado ✓');
+      })
+      .catch(err => {
+        loadingDiv.style.display = 'none';
+        errorDiv.textContent = `⚠️ ${err.message}`;
+        errorDiv.style.display = 'block';
+        console.error('Erro ao buscar clima:', err);
+      });
+  }
+
+  btn.onclick = buscarClima;
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') buscarClima(); });
+  input.focus();
+
+  // Se já houver uma cidade salva, busca automaticamente ao carregar a página
+  const savedCity = localStorage.getItem('weatherCity');
+  if (savedCity && !weatherData) {
+    input.value = savedCity;
+    buscarClima();
   }
 }
-function updateWeatherMini(){
-  if(!weatherData) return;
-  const ic=document.getElementById('wmIcon');
-  const tmp=document.getElementById('wmTemp');
-  const dsc=document.getElementById('wmDesc');
-  if(ic) ic.textContent=weatherIcon(weatherData.weather[0].id);
-  if(tmp) tmp.textContent=`${Math.round(weatherData.main.temp)}°C`;
-  if(dsc) dsc.textContent=weatherData.weather[0].description;
+
+function weatherIcon(id) {
+  if (id >= 200 && id < 300) return '⛈️';
+  if (id >= 300 && id < 400) return '🌦️';
+  if (id >= 500 && id < 600) return '🌧️';
+  if (id >= 600 && id < 700) return '❄️';
+  if (id >= 700 && id < 800) return '🌫️';
+  if (id === 800) return '☀️';
+  if (id === 801) return '🌤️';
+  if (id === 802) return '⛅';
+  return '☁️';
+}
+
+function updateWeatherMini() {
+  if (!weatherData) return;
+  const ic = document.getElementById('wmIcon');
+  const tmp = document.getElementById('wmTemp');
+  const dsc = document.getElementById('wmDesc');
+  if (ic) ic.textContent = weatherIcon(weatherData.weather[0].id);
+  if (tmp) tmp.textContent = `${Math.round(weatherData.main.temp)}°C`;
+  if (dsc) dsc.textContent = weatherData.weather[0].description;
 }
 
 /* ============================================================
@@ -1603,6 +1652,12 @@ startTopClock();
 navigateTo('dashboard');
 initFirebase();
 
+// Tenta carregar clima salvo ao iniciar
+const savedCity = localStorage.getItem('weatherCity');
+if (savedCity) {
+  weatherCity = savedCity;
+  // A busca será feita quando a página de clima for acessada
+}
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>

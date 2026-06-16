@@ -1458,12 +1458,11 @@ function addContact(){
 }
 
 /* ============================================================
-   CLIMA - CORRIGIDO COM MELHOR TRATAMENTO DE ERROS
+   CLIMA - CORRIGIDO COM A NOVA CHAVE
 ============================================================ */
-const OWM_KEY = '19498d7b4c3d5e9cfadee4ccc7bf50f8'; // Chave pública - pode ser substituída pela sua
+const OWM_KEY = '8ebc5cfa367516e89fbc3021e27c55a5'; // Sua chave atualizada
 
 function weatherHTML() {
-  // Carrega cidade salva no localStorage
   const savedCity = localStorage.getItem('weatherCity') || '';
   if (savedCity && !weatherCity) {
     weatherCity = savedCity;
@@ -1517,7 +1516,7 @@ function attachWeather() {
       .then(res => {
         if (!res.ok) {
           if (res.status === 404) throw new Error('Cidade não encontrada.');
-          if (res.status === 401) throw new Error('Chave da API inválida. Configure sua própria chave.');
+          if (res.status === 401) throw new Error('Chave da API inválida. Verifique sua chave.');
           throw new Error(`Erro ${res.status}: ${res.statusText}`);
         }
         return res.json();
@@ -1544,7 +1543,6 @@ function attachWeather() {
   input.addEventListener('keydown', e => { if (e.key === 'Enter') buscarClima(); });
   input.focus();
 
-  // Se já houver uma cidade salva, busca automaticamente ao carregar a página
   const savedCity = localStorage.getItem('weatherCity');
   if (savedCity && !weatherData) {
     input.value = savedCity;
@@ -1652,11 +1650,9 @@ startTopClock();
 navigateTo('dashboard');
 initFirebase();
 
-// Tenta carregar clima salvo ao iniciar
 const savedCity = localStorage.getItem('weatherCity');
 if (savedCity) {
   weatherCity = savedCity;
-  // A busca será feita quando a página de clima for acessada
 }
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
